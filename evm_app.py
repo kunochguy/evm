@@ -94,7 +94,7 @@ NETWORKS = {
     }
 }
 
-# 4. Initialize Connections (Clean, No Middleware Conflicts)
+# 4. Initialize Connections
 connections = {}
 if WALLET_ADDRESS and SAFE_ADDRESS:
     for name, config in NETWORKS.items():
@@ -125,8 +125,11 @@ def sweep_token(name, w3, chain_id, token_name, token_address, nonce):
     try:
         token_contract = w3.eth.contract(address=Web3.to_checksum_address(token_address), abi=ERC20_ABI)
         
-        # Explicit block identifier prevents empty states on Alt-L1s/BSC
-        balance = token_contract.functions.balanceOf(WALLET_ADDRESS).call(block_identifier='latest')
+        # Pass sender context and block identifier to satisfy strict node requirements
+        balance = token_contract.functions.balanceOf(WALLET_ADDRESS).call(
+            {'from': WALLET_ADDRESS}, 
+            block_identifier='latest'
+        )
         
         if balance > 0:
             tx = {
@@ -143,7 +146,8 @@ def sweep_token(name, w3, chain_id, token_name, token_address, nonce):
             return (True, True)
         return (False, False)
     except Exception as e:
-        print(f"[err] [-] Notice on {name} ({token_name}): Node returned empty state or sync lag.")
+        # Print the exact underlying exception so we can diagnose it immediately
+        print(f"[err] [-] Error on {name} ({token_name}): {str(e)}")
         return (True, False)
 
 def sweep_native(name, w3, chain_id, nonce):
