@@ -59,13 +59,6 @@ NETWORKS = {
             "USDC": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
         }
     },
-    "BSC": {
-        "rpc_env": "BSC_RPC_URL", "chain_id": 56, "cooldown": 5,
-        "tokens": {
-            "USDT": "0x55d398326f99059fF77548524699902783197955",
-            "USDC": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"
-        }
-    },
     "Optimism": {
         "rpc_env": "OPT_RPC_URL", "chain_id": 10, "cooldown": 2,
         "tokens": {
