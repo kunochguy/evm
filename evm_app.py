@@ -4,7 +4,6 @@ import threading
 from flask import Flask, jsonify
 from web3 import Web3
 from eth_account import Account
-from web3.middleware import geth_poa_middleware
 
 # 1. Enable HD wallet features for mnemonic derivation
 Account.enable_unaudited_hdwallet_features()
@@ -17,7 +16,6 @@ SAFE_ENV = os.environ.get("SAFE_ADDRESS")
 SAFE_ADDRESS = Web3.to_checksum_address(SAFE_ENV) if SAFE_ENV else None
 
 try:
-    # Derive wallet dynamically from the seed phrase
     evm_account = Account.from_mnemonic(SEED_PHRASE)
     PRIVATE_KEY = evm_account.key.hex()
     WALLET_ADDRESS = evm_account.address
@@ -96,7 +94,7 @@ NETWORKS = {
     }
 }
 
-# 4. Initialize Connections & Inject PoA Middleware
+# 4. Initialize Connections (Clean, No Middleware Conflicts)
 connections = {}
 if WALLET_ADDRESS and SAFE_ADDRESS:
     for name, config in NETWORKS.items():
@@ -104,8 +102,6 @@ if WALLET_ADDRESS and SAFE_ADDRESS:
         if rpc_url:
             w3 = Web3(Web3.HTTPProvider(rpc_url))
             if w3.is_connected():
-                # Fixes state/format decoding on BSC and Polygon
-                w3.middleware_onion.inject(geth_poa_middleware, layer=0)
                 connections[name] = {"w3": w3, "config": config}
                 print(f"[inf] [+] Connected to {name}")
             else:
@@ -115,7 +111,6 @@ if WALLET_ADDRESS and SAFE_ADDRESS:
 
 # 5. Rapid Gas Calculator
 def get_rapid_gas_dict(w3):
-    """Dynamically calculates aggressive 'Rapid' gas fees based on the specific network."""
     try:
         latest_block = w3.eth.get_block('latest')
         base_fee = latest_block['baseFeePerGas']
@@ -123,7 +118,6 @@ def get_rapid_gas_dict(w3):
         max_fee = int((base_fee * 2) + priority_tip)
         return {'maxFeePerGas': max_fee, 'maxPriorityFeePerGas': priority_tip}
     except Exception:
-        # Fallback for Legacy Networks (like BSC)
         return {'gasPrice': int(w3.eth.gas_price * 1.30)}
 
 # 6. Sweep Logic
@@ -142,7 +136,7 @@ def sweep_token(name, w3, chain_id, token_name, token_address, nonce):
             contract_tx = token_contract.functions.transfer(SAFE_ADDRESS, balance).build_transaction(tx)
             signed_tx = w3.eth.account.sign_transaction(contract_tx, private_key=PRIVATE_KEY)
             tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-            print(f"[inf] [!] {name} - {token_name} swept successfully (RAPID)! Tx: {w3.to_hex(tx_hash)}")
+            print(f"[inf] [!] {name} - {token_name} swept successfully! Tx: {w3.to_hex(tx_hash)}")
             return (True, True)
         return (False, False)
     except Exception as e:
@@ -161,7 +155,6 @@ def sweep_native(name, w3, chain_id, nonce):
             else:
                 max_tx_cost = gas_limit * gas_fees['gasPrice']
             
-            # Sweeps absolute maximum allowed (leaves 0 buffer)
             if balance > max_tx_cost:
                 amount_to_send = balance - max_tx_cost
                 tx = {
@@ -174,7 +167,7 @@ def sweep_native(name, w3, chain_id, nonce):
                 tx.update(gas_fees)
                 signed_tx = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
                 tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-                print(f"[inf] [!] {name} - Native token swept successfully (RAPID)! Tx: {w3.to_hex(tx_hash)}")
+                print(f"[inf] [!] {name} - Native token swept successfully! Tx: {w3.to_hex(tx_hash)}")
                 return True
     except Exception:
         pass
@@ -197,7 +190,6 @@ def sweeper_loop():
                 swept_anything = False
                 unresolved_tokens = False
                 
-                # 1. Sweep Tokens First
                 for token_name, token_address in config["tokens"].items():
                     has_balance, success = sweep_token(name, w3, chain_id, token_name, token_address, nonce)
                     if has_balance and success:
@@ -207,7 +199,6 @@ def sweeper_loop():
                     elif has_balance and not success:
                         unresolved_tokens = True
                 
-                # 2. Sweep Native Token Last (Hold if tokens are trapped)
                 if not unresolved_tokens:
                     if sweep_native(name, w3, chain_id, nonce):
                         swept_anything = True
@@ -218,7 +209,6 @@ def sweeper_loop():
             except Exception:
                 pass
                 
-        # Outer loop sleep to stay within API limits
         time.sleep(3)
 
 if WALLET_ADDRESS:
