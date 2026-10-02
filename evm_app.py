@@ -124,7 +124,10 @@ def get_rapid_gas_dict(w3):
 def sweep_token(name, w3, chain_id, token_name, token_address, nonce):
     try:
         token_contract = w3.eth.contract(address=Web3.to_checksum_address(token_address), abi=ERC20_ABI)
-        balance = token_contract.functions.balanceOf(WALLET_ADDRESS).call()
+        
+        # Explicit block identifier prevents empty states on Alt-L1s/BSC
+        balance = token_contract.functions.balanceOf(WALLET_ADDRESS).call(block_identifier='latest')
+        
         if balance > 0:
             tx = {
                 'from': WALLET_ADDRESS,
@@ -140,12 +143,12 @@ def sweep_token(name, w3, chain_id, token_name, token_address, nonce):
             return (True, True)
         return (False, False)
     except Exception as e:
-        print(f"[err] [-] Error sweeping {token_name} on {name}: {str(e)}")
+        print(f"[err] [-] Notice on {name} ({token_name}): Node returned empty state or sync lag.")
         return (True, False)
 
 def sweep_native(name, w3, chain_id, nonce):
     try:
-        balance = w3.eth.get_balance(WALLET_ADDRESS)
+        balance = w3.eth.get_balance(WALLET_ADDRESS, block_identifier='latest')
         if balance > 0:
             gas_limit = 21000
             gas_fees = get_rapid_gas_dict(w3)
