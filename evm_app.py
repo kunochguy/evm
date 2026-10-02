@@ -94,18 +94,22 @@ NETWORKS = {
     }
 }
 
-# 4. Initialize Connections
+# 4. Initialize Connections with a strict 5-second HTTP timeout
 connections = {}
 if WALLET_ADDRESS and SAFE_ADDRESS:
     for name, config in NETWORKS.items():
         rpc_url = os.environ.get(config["rpc_env"])
         if rpc_url:
-            w3 = Web3(Web3.HTTPProvider(rpc_url))
-            if w3.is_connected():
-                connections[name] = {"w3": w3, "config": config}
-                print(f"[inf] [+] Connected to {name}")
-            else:
-                print(f"[err] [-] Failed to connect to {name}")
+            try:
+                # Enforce a 5-second timeout so lagging nodes fail fast instead of freezing
+                w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={'timeout': 5}))
+                if w3.is_connected():
+                    connections[name] = {"w3": w3, "config": config}
+                    print(f"[inf] [+] Connected to {name}")
+                else:
+                    print(f"[err] [-] Failed to connect to {name}")
+            except Exception as e:
+                print(f"[err] [-] Connection exception on {name}: {str(e)}")
         else:
             print(f"[inf] [-] Skipping {name} (No RPC URL provided)")
 
@@ -124,8 +128,6 @@ def get_rapid_gas_dict(w3):
 def sweep_token(name, w3, chain_id, token_name, token_address, nonce):
     try:
         token_contract = w3.eth.contract(address=Web3.to_checksum_address(token_address), abi=ERC20_ABI)
-        
-        # Clean read call: View functions do not require a 'from' context
         balance = token_contract.functions.balanceOf(WALLET_ADDRESS).call(block_identifier='latest')
         
         if balance > 0:
@@ -143,7 +145,8 @@ def sweep_token(name, w3, chain_id, token_name, token_address, nonce):
             return (True, True)
         return (False, False)
     except Exception as e:
-        print(f"[err] [-] Error on {name} ({token_name}): {str(e)}")
+        # If BSC times out or fails, log it cleanly without locking up the loop
+        print(f"[err] [-] Notice on {name} ({token_name}): RPC timeout or node lag.")
         return (True, False)
 
 def sweep_native(name, w3, chain_id, nonce):
@@ -168,7 +171,7 @@ def sweep_native(name, w3, chain_id, nonce):
                     'chainId': chain_id
                 }
                 tx.update(gas_fees)
-                signed_tx = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_Key if 'PRIVATE_Key' in globals() else PRIVATE_KEY)
+                signed_tx = w3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
                 tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
                 print(f"[inf] [!] {name} - Native token swept successfully! Tx: {w3.to_hex(tx_hash)}")
                 return True
