@@ -26,10 +26,22 @@ except Exception as e:
     print(f"[err] [-] Mnemonic Derivation Error: {str(e)}")
     PRIVATE_KEY, WALLET_ADDRESS = None, None
 
-# ERC-20 Standard ABI
+# Modern ERC-20 Standard ABI compatible with Web3.py v6
 ERC20_ABI = [
-    {"constant": True, "inputs": [{"name": "_owner", "type": "address"}], "name": "balanceOf", "outputs": [{"name": "balance", "type": "uint256"}], "type": "function"},
-    {"constant": False, "inputs": [{"name": "_to", "type": "address"}, {"name": "_value", "type": "uint256"}], "name": "transfer", "outputs": [{"name": "", "type": "bool"}], "type": "function"}
+    {
+        "inputs": [{"name": "_owner", "type": "address"}],
+        "name": "balanceOf",
+        "outputs": [{"name": "balance", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"name": "_to", "type": "address"}, {"name": "_value", "type": "uint256"}],
+        "name": "transfer",
+        "outputs": [{"name": "", "type": "bool"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
 ]
 
 # 3. Multi-Chain Configuration Dictionary
@@ -92,7 +104,7 @@ if WALLET_ADDRESS and SAFE_ADDRESS:
         if rpc_url:
             w3 = Web3(Web3.HTTPProvider(rpc_url))
             if w3.is_connected():
-                # Fixes the empty wallet contract error on BSC and Polygon
+                # Fixes state/format decoding on BSC and Polygon
                 w3.middleware_onion.inject(geth_poa_middleware, layer=0)
                 connections[name] = {"w3": w3, "config": config}
                 print(f"[inf] [+] Connected to {name}")
