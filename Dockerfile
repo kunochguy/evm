@@ -18,4 +18,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Bind Gunicorn to the dynamic port assigned by the hosting provider
-CMD gunicorn --workers 2 --bind 0.0.0.0:$PORT evm_app:app
+CMD gunicorn --workers 1 --bind 0.0.0.0:$PORT evm_app:app
